@@ -1,12 +1,28 @@
 """
 Gerenciador de conexões Firebird e SQL Server
+Suporta fallback quando drivers não estão disponíveis (ex: Streamlit Cloud)
 """
-import fdb
-import pyodbc
 import pandas as pd
 from typing import Optional
 import streamlit as st
 from config import EMPRESAS
+import os
+
+# Imports opcionais - podem não estar disponíveis em ambiente cloud
+try:
+    import fdb
+    HAS_FDB = True
+except ImportError:
+    HAS_FDB = False
+
+try:
+    import pyodbc
+    HAS_PYODBC = True
+except ImportError:
+    HAS_PYODBC = False
+
+# Detectar ambiente
+IS_STREAMLIT_CLOUD = "STREAMLIT_SERVER_HEADLESS" in os.environ or not (HAS_FDB and HAS_PYODBC)
 
 class DatabaseManager:
     def __init__(self, empresa_id: int):
@@ -18,6 +34,25 @@ class DatabaseManager:
     def connect(self) -> bool:
         """Conecta ao banco de dados"""
         try:
+            # Verificar se drivers estão disponíveis
+            if self.tipo_db == "firebird" and not HAS_FDB:
+                st.error(
+                    "❌ **Driver Firebird não disponível em Streamlit Cloud**\n\n"
+                    "Para usar Firebird, você tem duas opções:\n"
+                    "1. **Instalar localmente** no seu computador\n"
+                    "2. **Usar um proxy de banco de dados** (próximo passo)"
+                )
+                return False
+            
+            if self.tipo_db == "mssql" and not HAS_PYODBC:
+                st.error(
+                    "❌ **Driver SQL Server não disponível em Streamlit Cloud**\n\n"
+                    "Para usar SQL Server, você tem duas opções:\n"
+                    "1. **Instalar localmente** no seu computador\n"
+                    "2. **Usar um proxy de banco de dados** (próximo passo)"
+                )
+                return False
+            
             if self.tipo_db == "firebird":
                 self.connection = fdb.connect(
                     host=self.config["host"],
